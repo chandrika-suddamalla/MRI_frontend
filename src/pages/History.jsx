@@ -4,30 +4,46 @@ import { useEffect, useState } from 'react';
 import api from '../api';
 import Navbar from '../components/Navbar';
 
+const escapeHtml = (value) => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const getTextValue = (value) => typeof value === 'string' ? value : '';
+
 const getHistorySummary = (item) => {
-  const title = item?.title || item?.name || 'Untitled report';
+  const title = item?.title || item?.name || item?.executiveSummary || item?.executive_summary || 'Untitled report';
   const createdAt = item?.created_at || item?.createdAt || item?.generated_at || item?.generatedAt || 'Unknown date';
-  const competitors = Array.isArray(item?.competitors) ? item.competitors : [];
-  const topics = Array.isArray(item?.topics) ? item.topics : [];
-  const sourceCount = Array.isArray(item?.sources) ? item.sources.length : 0;
-  const summaryParts = [];
-
-  if (competitors.length) {
-    summaryParts.push(`${competitors.length} competitor${competitors.length > 1 ? 's' : ''}`);
-  }
-
-  if (topics.length) {
-    summaryParts.push(`${topics.length} topic${topics.length > 1 ? 's' : ''}`);
-  }
-
-  if (sourceCount) {
-    summaryParts.push(`${sourceCount} source${sourceCount > 1 ? 's' : ''}`);
-  }
+  const competitors = Array.isArray(item?.competitors)
+    ? item.competitors
+    : Array.isArray(item?.competitorActivities)
+      ? item.competitorActivities.map((entry) => entry?.competitor || entry?.name || '').filter(Boolean)
+      : [];
+  const topics = Array.isArray(item?.topics)
+    ? item.topics
+    : Array.isArray(item?.themes)
+      ? item.themes.map((entry) => entry?.title || entry?.name || '').filter(Boolean)
+      : [];
+  const sources = Array.isArray(item?.sources)
+    ? item.sources
+    : Array.isArray(item?.sourceTraceability)
+      ? item.sourceTraceability.map((entry) => entry?.url || entry?.title || '').filter(Boolean)
+      : [];
+  const fallbackSummary = item?.summary || item?.executiveSummary || item?.executive_summary || 'Report generated successfully';
+  const summaryText = getTextValue(fallbackSummary).replace(/\s+/g, ' ').trim();
+  const summaryParts = summaryText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [summaryText];
+  const conciseSummary = summaryParts.slice(0, 2).join(' ').trim() || 'Report generated successfully';
 
   return {
     title,
     createdAt,
-    summary: summaryParts.join(' · ') || 'Report generated successfully',
+    summary: fallbackSummary,
+    conciseSummary,
+    competitors,
+    topics,
+    sources,
   };
 };
 
@@ -61,15 +77,25 @@ function History() {
       return;
     }
 
-    const competitors = Array.isArray(item?.competitors) ? item.competitors : [];
-    const topics = Array.isArray(item?.topics) ? item.topics : [];
-    const sources = Array.isArray(item?.sources) ? item.sources : [];
+    const competitors = summary.competitors.length ? summary.competitors : [];
+    const topics = summary.topics.length ? summary.topics : [];
+    const sources = summary.sources.length ? summary.sources : [];
+    const fullSummary = escapeHtml(summary.summary || 'Report generated successfully');
+    const competitorsMarkup = competitors.length
+      ? competitors.map((value) => `<div class="item"><p>${escapeHtml(value)}</p></div>`).join('')
+      : '<div class="item"><p>No competitors listed.</p></div>';
+    const topicsMarkup = topics.length
+      ? topics.map((value) => `<div class="item"><p>${escapeHtml(value)}</p></div>`).join('')
+      : '<div class="item"><p>No main themes listed.</p></div>';
+    const sourcesMarkup = sources.length
+      ? sources.map((value) => `<div class="item"><p>${escapeHtml(value)}</p></div>`).join('')
+      : '<div class="item"><p>No related sources listed.</p></div>';
 
     printWindow.document.write(`
       <!doctype html>
       <html>
         <head>
-          <title>${summary.title}</title>
+          <title>${escapeHtml(summary.title)}</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
             h1, h2 { margin-bottom: 8px; }
@@ -80,23 +106,23 @@ function History() {
           </style>
         </head>
         <body>
-          <h1>${summary.title}</h1>
-          <div class="meta">Generated: ${summary.createdAt}</div>
+          <h1>${escapeHtml(summary.title)}</h1>
+          <div class="meta">Generated: ${escapeHtml(summary.createdAt)}</div>
           <div class="section">
-            <h2>Summary</h2>
-            <div class="item"><p>${summary.summary}</p></div>
+            <h2>Executive Summary</h2>
+            <div class="item"><p>${fullSummary}</p></div>
           </div>
           <div class="section">
             <h2>Competitors</h2>
-            ${competitors.map((value) => `<div class="item"><p>${value}</p></div>`).join('')}
+            ${competitorsMarkup}
           </div>
           <div class="section">
-            <h2>Topics</h2>
-            ${topics.map((value) => `<div class="item"><p>${value}</p></div>`).join('')}
+            <h2>Main Themes</h2>
+            ${topicsMarkup}
           </div>
           <div class="section">
-            <h2>Sources</h2>
-            ${sources.map((value) => `<div class="item"><p>${value}</p></div>`).join('')}
+            <h2>Related Sources</h2>
+            ${sourcesMarkup}
           </div>
         </body>
       </html>
@@ -123,42 +149,94 @@ function History() {
             )}
             {error && <Alert severity="error">{error}</Alert>}
             {!loading && !error && (
-              <List sx={{ bgcolor: 'grey.50', borderRadius: 2 }}>
-                {historyItems.map((item, index) => {
-                  const summary = getHistorySummary(item);
+              <>
+                {historyItems.length === 0 ? (
+                  <Alert severity="info">No saved reports yet. Run a research analysis to populate this view.</Alert>
+                ) : (
+                  <List sx={{ bgcolor: 'grey.50', borderRadius: 2 }}>
+                    {historyItems.map((item, index) => {
+                      const summary = getHistorySummary(item);
+                      const reportNumber = index + 1;
 
-                  return (
-                    <Box key={item.id || `${summary.title}-${index}`}>
-                      <ListItem
-                        alignItems="flex-start"
-                        secondaryAction={
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Chip label="Completed" size="small" color="success" variant="outlined" />
-                            <Button variant="outlined" size="small" startIcon={<Download />} onClick={() => handleDownloadPdf(item)}>
-                              PDF
-                            </Button>
-                          </Stack>
-                        }
-                      >
-                        <ListItemText
-                          primary={summary.title}
-                          secondary={
-                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                              <Typography variant="body2" color="text.secondary">
-                                Generated: {summary.createdAt}
-                              </Typography>
-                              <Typography variant="body2" color="text.secondary">
-                                {summary.summary}
-                              </Typography>
-                            </Stack>
-                          }
-                        />
-                      </ListItem>
-                      {index < historyItems.length - 1 && <Divider />}
-                    </Box>
-                  );
-                })}
-              </List>
+                      return (
+                        <Box key={item.id || `${summary.title}-${index}`}>
+                          <ListItem
+                            alignItems="flex-start"
+                            secondaryAction={
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Chip label="Completed" size="small" color="success" variant="outlined" />
+                                <Button variant="outlined" size="small" startIcon={<Download />} onClick={() => handleDownloadPdf(item)}>
+                                  PDF
+                                </Button>
+                              </Stack>
+                            }
+                          >
+                            <ListItemText
+                              primary={
+                                <Stack spacing={0.5}>
+                                  <Typography variant="body1" fontWeight={700}>
+                                    Report {reportNumber}:
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Generated: {summary.createdAt}
+                                  </Typography>
+                                </Stack>
+                              }
+                              secondary={
+                                <Stack spacing={1.25} sx={{ mt: 1 }}>
+                                  <Box>
+                                    <Typography variant="body2" fontWeight={700}>Summary</Typography>
+                                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                                      {summary.conciseSummary.length > 140 ? `${summary.conciseSummary.slice(0, 140)}...` : summary.conciseSummary}
+                                    </Typography>
+                                  </Box>
+                                  <Box>
+                                    <Typography variant="body2" fontWeight={700}>Competitors</Typography>
+                                    {summary.competitors.length > 0 ? (
+                                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
+                                        {summary.competitors.slice(0, 5).map((competitor) => (
+                                          <Chip key={competitor} label={competitor} size="small" variant="outlined" color="primary" />
+                                        ))}
+                                      </Stack>
+                                    ) : (
+                                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>No competitors listed.</Typography>
+                                    )}
+                                  </Box>
+                                  <Box>
+                                    <Typography variant="body2" fontWeight={700}>Main Themes</Typography>
+                                    {summary.topics.length > 0 ? (
+                                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
+                                        {summary.topics.slice(0, 5).map((topic) => (
+                                          <Chip key={topic} label={topic} size="small" variant="outlined" color="secondary" />
+                                        ))}
+                                      </Stack>
+                                    ) : (
+                                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>No main themes listed.</Typography>
+                                    )}
+                                  </Box>
+                                  <Box>
+                                    <Typography variant="body2" fontWeight={700}>Related Sources</Typography>
+                                    {summary.sources.length > 0 ? (
+                                      <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
+                                        {summary.sources.slice(0, 5).map((source) => (
+                                          <li key={source}><Typography variant="body2" color="text.secondary">{source}</Typography></li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>No related sources listed.</Typography>
+                                    )}
+                                  </Box>
+                                </Stack>
+                              }
+                            />
+                          </ListItem>
+                          {index < historyItems.length - 1 && <Divider />}
+                        </Box>
+                      );
+                    })}
+                  </List>
+                )}
+              </>
             )}
           </Stack>
         </Paper>
