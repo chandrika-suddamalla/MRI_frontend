@@ -12,7 +12,7 @@ function Login() {
   const [isRegistering, setIsRegistering] = useState(false);
   const navigate = useNavigate();
 
-  const getErrorMessage = (err, fallbackMessage) => {
+  /* const getErrorMessage = (err, fallbackMessage) => {
     const data = err?.response?.data;
 
     if (typeof data === 'string') {
@@ -56,7 +56,7 @@ function Login() {
     }
 
     return fallbackMessage;
-  };
+  }; */
 
   const persistAuth = (accessToken, user) => {
     localStorage.setItem('isAuthenticated', 'true');

@@ -1,15 +1,22 @@
+/* eslint-disable react-hooks/static-components */
 import {
   Add,
+  AutoGraph,
+  Category,
   CheckCircle,
   Delete,
   Download,
   Insights,
+  Groups,
   Link as LinkIcon,
   ReportProblem,
   WarningAmber,
 } from '@mui/icons-material';
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Chip,
@@ -17,11 +24,11 @@ import {
   Container,
   Divider,
   IconButton,
-  LinearProgress,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
+  LinearProgress,
   Paper,
   Stack,
   Step,
@@ -31,6 +38,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useEffect, useRef, useState } from 'react';
 import api from '../api';
 import Navbar from '../components/Navbar';
@@ -50,36 +58,53 @@ const STEP_INTERVAL_MS = 8_000;
 // ── Small reusable components ─────────────────────────────────────────────────
 
 function ScoreBar({ label, value }) {
-  const pct = Math.round((value || 0) * 100);
+  const pct = Math.max(0, Math.min(100, Math.round((Number(value) || 0) * 100)));
   const color = pct >= 75 ? 'success' : pct >= 50 ? 'warning' : 'error';
   return (
     <Stack spacing={0.5}>
       <Stack direction="row" justifyContent="space-between">
-        <Typography variant="caption" color="text.secondary">
-          {label}
-        </Typography>
-        <Typography variant="caption" fontWeight={700} color={`${color}.main`}>
-          {pct}%
-        </Typography>
+        <Typography variant="caption" color="text.secondary">{label}</Typography>
+        <Typography variant="caption" fontWeight={700} color={`${color}.main`}>{pct}%</Typography>
       </Stack>
-      <LinearProgress
-        variant="determinate"
-        value={pct}
-        color={color}
-        sx={{ height: 6, borderRadius: 3 }}
-      />
+      <LinearProgress variant="determinate" value={pct} color={color} sx={{ height: 6, borderRadius: 3 }} />
     </Stack>
   );
 }
 
 function SectionHeader({ children }) {
   return (
-    <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+    <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.25, letterSpacing: '-0.01em', color: 'text.primary' }}>
       {children}
     </Typography>
   );
 }
 
+function toBullets(value, maxLines) {
+  if (Array.isArray(value)) return value.filter(Boolean).slice(0, maxLines);
+  if (typeof value !== 'string') return [];
+  const explicit = value.split(/\n+/).map((line) => line.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean);
+  if (explicit.length > 1) return explicit.slice(0, maxLines);
+  return value.split(/(?<=[.!?])\s+(?=[A-Z0-9])/).map((line) => line.trim()).filter(Boolean).slice(0, maxLines);
+}
+
+function PresentationBullets({ value, maxLines }) {
+  const items = toBullets(value, maxLines);
+  if (!items.length) return <Typography variant="body2" color="text.secondary">No relevant information found in the provided sources.</Typography>;
+  return (
+    <List disablePadding sx={{ pl: 0.5 }}>
+      {items.map((item, index) => (
+        <ListItem key={`${item}-${index}`} disableGutters alignItems="flex-start" sx={{ py: 0.55 }}>
+          <ListItemIcon sx={{ minWidth: 22, pt: 0.9 }}>
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: 'primary.main' }} />
+          </ListItemIcon>
+          <ListItemText primary={item} primaryTypographyProps={{ variant: 'body2', color: 'text.secondary', lineHeight: 1.75 }} />
+        </ListItem>
+      ))}
+    </List>
+  );
+}
+
+// eslint-disable-next-line no-unused-vars
 function BulletList({ items }) {
   if (!items || items.length === 0) return null;
   return (
@@ -115,7 +140,6 @@ function Dashboard() {
   // Advance the progress stepper automatically while loading
   useEffect(() => {
     if (loading) {
-      setActiveStep(0);
       stepTimerRef.current = setInterval(() => {
         setActiveStep((prev) => Math.min(prev + 1, PIPELINE_STEPS.length - 1));
       }, STEP_INTERVAL_MS);
@@ -163,6 +187,7 @@ function Dashboard() {
       return;
     }
 
+    setActiveStep(0);
     setLoading(true);
     setError('');
     setReport(null);
@@ -177,17 +202,27 @@ function Dashboard() {
       const payload = { competitors, topics, urls: validUrls, context };
       const response = await api.post('/api/research', payload);
       const d = response.data || {};
+      const structured = d.market_intelligence_report || {};
+      const asArray = (value) => (Array.isArray(value) ? value : []);
 
       const normalized = {
-        executiveSummary: d.executiveSummary || d.executive_summary || '',
-        themes: d.themes || [],
-        marketTrends: d.marketTrends || d.market_trends || [],
-        competitorActivities: d.competitorActivities || d.competitor_activities || [],
-        businessInsights: d.businessInsights || d.business_insights || [],
-        statistics: d.statistics || [],
-        companiesMentioned: d.companiesMentioned || d.companies_mentioned || [],
-        sourceTraceability: d.sourceTraceability || d.source_traceability || [],
-        hallucinationCheck: d.hallucinationCheck || d.hallucination_check || {
+        executiveSummary: structured.executive_summary || d.executiveSummary || d.executive_summary || '',
+        themes: asArray(structured.key_themes || d.themes).map((theme) => ({
+          title: theme.theme_name || theme.title,
+          summary: theme.detailed_explanation || theme.summary,
+          sources: asArray(theme.supporting_source_urls || theme.sources),
+        })),
+        marketTrends: asArray(d.marketTrends || d.market_trends),
+        competitorActivities: asArray(structured.competitor_activities || d.competitorActivities || d.competitor_activities).map((item) => ({
+          competitor: item.competitor_name || item.competitor,
+          activity: Array.isArray(item.activities) ? item.activities.join('\n') : item.activity,
+          sources: asArray(item.supporting_source_urls || item.sources),
+        })),
+        businessInsights: asArray(d.businessInsights || d.business_insights),
+        statistics: asArray(d.statistics),
+        companiesMentioned: asArray(d.companiesMentioned || d.companies_mentioned),
+        sourceTraceability: asArray(d.sourceTraceability || d.source_traceability),
+        hallucinationCheck: (d.hallucinationCheck || d.hallucination_check) && typeof (d.hallucinationCheck || d.hallucination_check) === 'object' ? (d.hallucinationCheck || d.hallucination_check) : {
           status: 'Unknown',
           confidence: 0,
           accuracy_score: 0,
@@ -227,6 +262,9 @@ function Dashboard() {
     const competitorMarkup = report.competitorActivities
       .map((a) => `<div class="item"><h3>${a.competitor}</h3><p>${a.activity}</p>${a.sources?.length ? `<p><strong>Sources:</strong> ${a.sources.map((s) => `<a href="${s}">${s}</a>`).join(', ')}</p>` : ''}</div>`)
       .join('');
+    const sourceMarkup = report.sourceTraceability
+      .map((source) => `<div class="item"><h3>${source.title || 'Source'}</h3><p><a href="${source.url}">${source.url}</a></p><p>${source.status || 'processed'}</p></div>`)
+      .join('');
     const hc = report.hallucinationCheck;
     const claimsMarkup = hc.unsupported_claims?.length
       ? hc.unsupported_claims.map((c) => `<li>${c}</li>`).join('')
@@ -260,11 +298,9 @@ ${report.executiveSummary ? `<div class="section"><h2>Executive summary</h2><div
 
   // ── Hallucination panel ──────────────────────────────────────────────────────
   function HallucinationPanel({ hc }) {
-    const isSupported = hc.status === 'Supported';
+    const isSupported = hc.status === 'Supported' || hc.status === 'Source-grounded';
     const Icon = isSupported ? CheckCircle : WarningAmber;
     const color = isSupported ? 'success' : 'warning';
-    const accuracyPct = Math.round((hc.accuracy_score || 0) * 100);
-    const completenessPct = Math.round((hc.completeness_score || 0) * 100);
 
     return (
       <Paper
@@ -506,7 +542,7 @@ ${report.executiveSummary ? `<div class="section"><h2>Executive summary</h2><div
 
           {/* ── Report output ── */}
           {report && (
-            <Paper variant="outlined" sx={{ mt: 4, p: { xs: 2, md: 3 }, borderRadius: 3 }}>
+            <Paper variant="outlined" sx={{ mt: 4, p: { xs: 2, md: 3 }, borderRadius: 4, borderColor: 'primary.light', boxShadow: '0 18px 45px rgba(15, 23, 42, 0.08)', overflow: 'hidden' }}>
               <Stack spacing={3}>
                 {/* Report header */}
                 <Stack
@@ -515,9 +551,13 @@ ${report.executiveSummary ? `<div class="section"><h2>Executive summary</h2><div
                   alignItems={{ xs: 'flex-start', sm: 'center' }}
                   justifyContent="space-between"
                 >
-                  <Typography variant="h5" fontWeight={700}>
-                    Market Intelligence Summary
-                  </Typography>
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    <Box sx={{ display: 'grid', placeItems: 'center', width: 42, height: 42, borderRadius: 2.5, color: 'white', background: 'linear-gradient(135deg, #2563eb, #7c3aed)' }}><AutoGraph /></Box>
+                    <Box>
+                      <Typography variant="h5" fontWeight={800} sx={{ letterSpacing: '-0.02em' }}>Market Intelligence Report</Typography>
+                      <Typography variant="caption" color="text.secondary">Source-grounded analysis, ready to share</Typography>
+                    </Box>
+                  </Stack>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Chip icon={<Insights />} label="AI-generated report" color="primary" variant="outlined" />
                     <Button
@@ -536,23 +576,17 @@ ${report.executiveSummary ? `<div class="section"><h2>Executive summary</h2><div
                 {/* Executive summary */}
                 {report.executiveSummary && (
                   <Box>
-                    <SectionHeader>Executive summary</SectionHeader>
+                    <Stack direction="row" spacing={1} alignItems="center" mb={0.5}><Insights color="primary" fontSize="small" /><SectionHeader>Executive Summary</SectionHeader></Stack>
                     <Paper
                       variant="outlined"
                       sx={{
                         p: 2.5,
                         borderRadius: 3,
-                        bgcolor: 'linear-gradient(135deg, rgba(25,118,210,0.06), rgba(147,51,234,0.04))',
+                        background: 'linear-gradient(135deg, rgba(37,99,235,0.09), rgba(124,58,237,0.06))',
                         borderColor: 'primary.light',
                       }}
                     >
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ lineHeight: 1.9, whiteSpace: 'pre-wrap' }}
-                      >
-                        {report.executiveSummary}
-                      </Typography>
+                      <PresentationBullets value={report.executiveSummary} maxLines={30} />
                     </Paper>
                   </Box>
                 )}
@@ -560,20 +594,15 @@ ${report.executiveSummary ? `<div class="section"><h2>Executive summary</h2><div
                 {/* Key themes */}
                 {report.themes.length > 0 && (
                   <Box>
-                    <SectionHeader>Key themes</SectionHeader>
+                    <Stack direction="row" spacing={1} alignItems="center" mb={0.5}><Category color="primary" fontSize="small" /><SectionHeader>Key Themes</SectionHeader></Stack>
                     <Stack spacing={1.5}>
                       {report.themes.map((theme, i) => (
-                        <Paper
-                          key={i}
-                          variant="outlined"
-                          sx={{ p: 2.5, borderRadius: 3, borderColor: 'divider' }}
-                        >
-                          <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                            {theme.title}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                            {theme.summary}
-                          </Typography>
+                        <Accordion key={i} defaultExpanded disableGutters elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: '12px !important', '&:before': { display: 'none' } }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 2.5, minHeight: 60 }}>
+                            <Typography variant="subtitle2" fontWeight={700}>{theme.title}</Typography>
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ px: 2.5, pb: 2.5 }}>
+                          <PresentationBullets value={theme.summary} maxLines={20} />
                           {theme.sources && theme.sources.filter(Boolean).length > 0 && (
                             <Stack direction="row" spacing={0.5} flexWrap="wrap" mt={1.5}>
                               {theme.sources.filter(Boolean).map((s, j) => (
@@ -592,7 +621,8 @@ ${report.executiveSummary ? `<div class="section"><h2>Executive summary</h2><div
                               ))}
                             </Stack>
                           )}
-                        </Paper>
+                          </AccordionDetails>
+                        </Accordion>
                       ))}
                     </Stack>
                   </Box>
@@ -601,16 +631,15 @@ ${report.executiveSummary ? `<div class="section"><h2>Executive summary</h2><div
                 {/* Competitor activity */}
                 {report.competitorActivities.length > 0 && (
                   <Box>
-                    <SectionHeader>Competitor activity</SectionHeader>
+                    <Stack direction="row" spacing={1} alignItems="center" mb={0.5}><Groups color="primary" fontSize="small" /><SectionHeader>Competitor Activities</SectionHeader></Stack>
                     <Stack spacing={1.5}>
                       {report.competitorActivities.map((item, i) => (
-                        <Paper key={i} variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
-                          <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                            {item.competitor}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                            {item.activity}
-                          </Typography>
+                        <Accordion key={i} defaultExpanded disableGutters elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: '12px !important', '&:before': { display: 'none' } }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 2.5, minHeight: 60 }}>
+                            <Typography variant="subtitle2" fontWeight={700}>{item.competitor}</Typography>
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ px: 2.5, pb: 2.5 }}>
+                          <PresentationBullets value={item.activity} maxLines={20} />
                           {item.sources && item.sources.filter(Boolean).length > 0 && (
                             <Stack direction="row" spacing={0.5} flexWrap="wrap" mt={1.5}>
                               {item.sources.filter(Boolean).map((s, j) => (
@@ -629,7 +658,8 @@ ${report.executiveSummary ? `<div class="section"><h2>Executive summary</h2><div
                               ))}
                             </Stack>
                           )}
-                        </Paper>
+                          </AccordionDetails>
+                        </Accordion>
                       ))}
                     </Stack>
                   </Box>
