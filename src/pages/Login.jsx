@@ -84,11 +84,17 @@ function Login() {
       const { access_token, user } = response.data;
       persistAuth(access_token, user);
     } catch (err) {
-      const backendMessage = err?.response?.data?.detail;
-      const message = isRegistering
-        ? 'Unable to create the account right now. Please try again.'
-        : (typeof backendMessage === 'string' ? backendMessage : 'Unable to sign in right now. Please try again shortly.');
-      setError(message);
+      const data = err?.response?.data;
+      const backendMessage = typeof data === 'string'
+        ? data
+        : (typeof data?.detail === 'string'
+            ? data.detail
+            : (typeof data?.message === 'string'
+                ? data.message
+                : (typeof data?.error === 'string'
+                    ? data.error
+                    : 'Unable to complete the request right now. Please try again.')));
+      setError(backendMessage);
       console.error(err);
     } finally {
       setLoading(false);
