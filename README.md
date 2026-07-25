@@ -4,6 +4,15 @@
 
 ---
 
+# Live Application
+
+| Component | Link |
+|----------|------|
+| Frontend | **https://mri-frontend-4opxigsvf-mri-agent.vercel.app/** |
+| Backend API | **https://mi-backend-dev-app.agreeablepebble-c7083890.westus2.azurecontainerapps.io** |
+
+---
+
 ### Note
 
 - The frontend is hosted on **Vercel**, and the backend is deployed on **Microsoft Azure Container Apps**.
@@ -40,15 +49,6 @@ The **Market Research Intelligence Assistant (MRI)** automates this process by a
 - Trace every insight back to its original source
 - Verify generated insights using an **LLM-as-a-Judge** approach
 - Store previously generated reports for future reference
-
----
-
-# Live Application
-
-| Component | Link |
-|----------|------|
-| Frontend | **https://mri-frontend-4opxigsvf-mri-agent.vercel.app/** |
-| Backend API | **https://mi-backend-dev-app.agreeablepebble-c7083890.westus2.azurecontainerapps.io** |
 
 ---
 
