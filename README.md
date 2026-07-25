@@ -238,8 +238,3 @@ Generative AI tools were used to assist with implementation, debugging, document
 
 ---
 
-# Author
-
-**Chandrika Suddamalla**
-
-Software Engineer | Backend Development | AI Applications
