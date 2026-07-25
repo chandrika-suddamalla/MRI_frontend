@@ -212,27 +212,6 @@ Stored Report
 
 ---
 
-# Screenshots
-
-> Add screenshots before submission.
-
-Suggested images:
-
-```
-docs/
-
-├── login.png
-
-├── dashboard.png
-
-├── report.png
-
-├── history.png
-
-└── verification.png
-```
-
----
 
 # Future Improvements
 
