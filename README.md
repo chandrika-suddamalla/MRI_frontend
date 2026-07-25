@@ -39,7 +39,7 @@ The **Market Research Intelligence Assistant (MRI)** automates this process by a
 
 ### Register Page
 
-![Register Page](/MRI_frontend/Images/register.jpg)
+![Register Page](Images/register.jpg)
 
 ### Login page
 
