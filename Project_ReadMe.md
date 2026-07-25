@@ -142,7 +142,7 @@ sequenceDiagram
 
 ## AI
 
-- Groq LLM
+- Groq LLM (Meta Llama 3.3 70B Versatile, accessed through the Groq API)
 - LLM-as-a-Judge
 
 ## DevOps
@@ -260,7 +260,7 @@ The current implementation focuses on delivering the core assignment requirement
 
 ## AI Models
 
-- Groq LLM model
+- Groq LLM model (Meta Llama 3.3 70B Versatile, accessed through the Groq API)
 
 ## AI Validation
 

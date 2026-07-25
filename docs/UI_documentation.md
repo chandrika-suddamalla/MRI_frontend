@@ -455,7 +455,7 @@ The frontend consumes AI-generated responses from the backend.
 
 AI technologies used by the overall solution include:
 
-- Groq LLM
+- Groq LLM (Meta Llama 3.3 70B Versatile, accessed through the Groq API)
 - LLM-as-a-Judge
 
 Development assistance was provided using Generative AI tools for documentation, code refinement, and implementation guidance. All generated content was reviewed and validated before inclusion.
